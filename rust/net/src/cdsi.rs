@@ -482,7 +482,6 @@ mod test {
         AsStaticHttpHeader as _, EnableDomainFronting, RECOMMENDED_WS_CONFIG,
     };
     use nonzero_ext::nonzero;
-    use tokio_stream::wrappers::UnboundedReceiverStream;
     use tungstenite::protocol::CloseFrame;
     use tungstenite::protocol::frame::coding::CloseCode;
     use uuid::Uuid;
@@ -491,6 +490,7 @@ mod test {
     use super::*;
     use crate::auth::Auth;
     use crate::connect_state::{ConnectState, SUGGESTED_CONNECT_CONFIG};
+    use crate::env::StaticIpOrder;
 
     #[test]
     fn parse_lookup_response_entries() {
@@ -920,23 +920,25 @@ mod test {
 
     #[test_log::test(tokio::test)]
     async fn websocket_rejected_with_http_429_too_many_requests() {
-        let h2_server = warp::get().then(|| async move {
+        let service = warp::get().then(|| async move {
             let reply = warp::reply();
             let reply = warp::reply::with_header(reply, RetryLater::HEADER_NAME.as_str(), "100");
             warp::reply::with_status(reply, warp::http::StatusCode::TOO_MANY_REQUESTS)
         });
 
-        let (tx_connections, incoming_connections) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(
-            warp::serve(h2_server)
-                .serve_incoming(UnboundedReceiverStream::new(incoming_connections)),
-        );
+        let (tx_connections, mut incoming_connections) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(conn) = incoming_connections.recv().await {
+                tokio::spawn(hyper::server::conn::http1::Builder::new().serve_connection(
+                    hyper_util::rt::TokioIo::new(conn),
+                    hyper_util::service::TowerToHyperService::new(warp::service(service)),
+                ));
+            }
+        });
 
         let connector = ConnectFn(|(), _route| {
             let (local, remote) = tokio::io::duplex(1024);
-            tx_connections
-                .send(Ok::<_, TransportConnectError>(local))
-                .unwrap();
+            tx_connections.send(local).unwrap();
             std::future::ready(Ok::<_, TransportConnectError>(remote))
         });
 
@@ -952,7 +954,10 @@ mod test {
         let network_change_event = no_network_change_events();
 
         // If we don't mock out the DNS, this test will fail on machines without internet access.
-        let static_map = HashMap::from([env.cdsi.domain_config.static_fallback()]);
+        let static_map = HashMap::from([env
+            .cdsi
+            .domain_config
+            .static_fallback(StaticIpOrder::HARDCODED)]);
         let dns_resolver = DnsResolver::new_from_static_map(static_map);
 
         let result = CdsiConnection::connect_with(

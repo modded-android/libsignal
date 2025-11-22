@@ -10,6 +10,7 @@ use std::ops::RangeInclusive;
 use derive_where::derive_where;
 use intmap::IntMap;
 use itertools::Itertools as _;
+use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::backup::TryIntoWith;
 use crate::backup::chat::reactions::{ReactionError, ReactionSet};
@@ -69,8 +70,8 @@ pub enum PollError {
     UnknownVoterId,
     /// voter id is not self nor contact
     InvalidVoterId,
-    /// poll option size ({0}) is out of bounds
-    InvalidPollStringSize(usize),
+    /// {0} size ({1}) is out of bounds
+    InvalidPollStringSize(&'static str, usize),
     /// {0} option(s) is too few for a poll
     TooFewOptions(usize),
     /// {0}
@@ -123,8 +124,8 @@ impl<R: Clone, C: LookupPair<RecipientId, MinimalRecipientData, R> + ReportUnusu
             votes,
             special_fields: _,
         } = self;
-        validate_poll_string_len(&option)?;
-        validate_unique_voters(&votes)?;
+        validate_poll_string_len(&option, "poll option")?;
+        validate_unique_voters(votes.iter().map(|vote| vote.voterId))?;
         let votes = votes
             .into_iter()
             .map(|vote| vote.try_into_with(context))
@@ -148,14 +149,23 @@ impl<R: Clone, C: LookupPair<RecipientId, MinimalRecipientData, R> + ReportUnusu
             reactions,
             special_fields: _,
         } = self;
-        validate_poll_string_len(&question)?;
+        validate_poll_string_len(&question, "poll question")?;
         if options.len() < MIN_POLL_OPTIONS {
             return Err(Self::Error::TooFewOptions(options.len()));
         }
+        // Per option enforcement of unique voters happens inside PollOptionProto::try_with_context,
+        // but we need to stash all voter ids in order to enforce single vote per voter if allow_multiple is false.
+        let all_voter_ids = options
+            .iter()
+            .flat_map(|opt| opt.votes.iter().map(|vote| vote.voterId))
+            .collect_vec();
         let options = options
             .into_iter()
             .map(|opt| opt.try_into_with(context))
             .collect::<Result<Vec<_>, _>>()?;
+        if !allow_multiple {
+            validate_unique_voters(all_voter_ids.iter().copied())?;
+        }
         let reactions = reactions.try_into_with(context)?;
         Ok(Poll {
             question,
@@ -177,7 +187,7 @@ impl<C: ReportUnusualTimestamp> TryIntoWith<PollTerminate, C> for PollTerminateP
             question,
             special_fields: _,
         } = self;
-        validate_poll_string_len(&question)?;
+        validate_poll_string_len(&question, "poll question")?;
         let target_sent_timestamp = Timestamp::from_millis(
             targetSentTimestamp,
             "PollTerminateUpdate.targetSentTimestamp",
@@ -190,18 +200,18 @@ impl<C: ReportUnusualTimestamp> TryIntoWith<PollTerminate, C> for PollTerminateP
     }
 }
 
-fn validate_poll_string_len(s: &str) -> Result<(), PollError> {
-    let len = s.len();
+fn validate_poll_string_len(s: &str, description: &'static str) -> Result<(), PollError> {
+    let len = s.graphemes(true).count();
     if !POLL_STRING_LENGTH_RANGE.contains(&len) {
-        return Err(PollError::InvalidPollStringSize(len));
+        return Err(PollError::InvalidPollStringSize(description, len));
     }
     Ok(())
 }
 
-fn validate_unique_voters(votes: &[PollVoteProto]) -> Result<(), PollError> {
-    let mut hist = IntMap::<_, usize>::with_capacity(votes.len());
-    for vote in votes {
-        let id = RecipientId(vote.voterId);
+fn validate_unique_voters(ids: impl ExactSizeIterator<Item = u64>) -> Result<(), PollError> {
+    let mut hist = IntMap::<_, usize>::with_capacity(ids.len());
+    for id in ids {
+        let id = RecipientId(id);
         *hist.entry(id).or_default() += 1;
     }
     let non_unique_voters = hist
@@ -270,10 +280,11 @@ mod test {
 
     #[test_case("a" => Ok(()); "lower bound")]
     #[test_case(&format!("{:0100}", 0) => Ok(()); "upper bound")]
-    #[test_case("" => Err(PollError::InvalidPollStringSize(0)); "too short")]
-    #[test_case(&format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize(101)); "too long")]
+    #[test_case("" => Err(PollError::InvalidPollStringSize("test string", 0)); "too short")]
+    #[test_case(&format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize("test string", 101)); "too long")]
+    #[test_case("🧑‍🧑‍🧒‍🧒🧑‍🧑‍🧒‍🧒🧑‍🧑‍🧒‍🧒🧑‍🧑‍🧒‍🧒🧑‍🧑‍🧒‍🧒" => Ok(()); "grapheme clusters")]
     fn length_check(s: &str) -> Result<(), PollError> {
-        validate_poll_string_len(s)
+        validate_poll_string_len(s, "test string")
     }
 
     fn poll_option_proto(option: &str) -> PollOptionProto {
@@ -287,7 +298,7 @@ mod test {
     fn poll_proto() -> PollProto {
         PollProto {
             question: "To be or not to be?".to_string(),
-            allowMultiple: false,
+            allowMultiple: true,
             options: vec![
                 poll_option_proto("that"),
                 poll_option_proto("is"),
@@ -341,7 +352,7 @@ mod test {
             result,
             Ok(Poll {
                 question,
-                allow_multiple: false,
+                allow_multiple: true,
                 options,
                 has_ended: false,
                 reactions,
@@ -361,12 +372,13 @@ mod test {
     #[test_case(|x| x.options = vec![] => Err(PollError::TooFewOptions(0)); "not an option")]
     #[test_case(|x| x.options.truncate(1) => Err(PollError::TooFewOptions(1)); "but one option")]
     #[test_case(|x| x.options.truncate(2) => Ok(()); "barely enough choice")]
-    #[test_case(|x| x.question = "".to_string() => Err(PollError::InvalidPollStringSize(0)); "empty question")]
+    #[test_case(|x| x.question = "".to_string() => Err(PollError::InvalidPollStringSize("poll question", 0)); "empty question")]
     #[test_case(|x| x.question = "a".to_string() => Ok(()); "question len lower bound")]
     #[test_case(|x| x.question = format!("{:0100}", 0) => Ok(()); "question len upper bound")]
-    #[test_case(|x| x.question = format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize(101)); "question too long")]
+    #[test_case(|x| x.question = format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize("poll question", 101)); "question too long")]
     #[test_case(|x| x.reactions.clear() => Ok(()); "no reactions")]
     #[test_case(|x| x.reactions.push(ReactionProto::default()) => Err(PollError::Reaction(ReactionError::EmptyEmoji)); "invalid reaction")]
+    #[test_case(|x| x.allowMultiple = false => Err(PollError::NonUniqueVoters(vec![TestContext::SELF_ID])); "non unique voters")]
     fn poll(modify: fn(&mut PollProto)) -> Result<(), PollError> {
         let mut poll = poll_proto();
         modify(&mut poll);
@@ -401,10 +413,10 @@ mod test {
     #[test_case(|_| {} => Ok(()); "happy path")]
     #[test_case(|x| x.targetSentTimestamp = Timestamp::MAX_SAFE_TIMESTAMP_MS + 1 =>
         Err(PollError::InvalidTimestamp(TimestampError("PollTerminateUpdate.targetSentTimestamp", Timestamp::MAX_SAFE_TIMESTAMP_MS + 1))); "bad timestamp")]
-    #[test_case(|x| x.question = "".to_string() => Err(PollError::InvalidPollStringSize(0)); "empty question")]
+    #[test_case(|x| x.question = "".to_string() => Err(PollError::InvalidPollStringSize("poll question", 0)); "empty question")]
     #[test_case(|x| x.question = "a".to_string() => Ok(()); "question len lower bound")]
     #[test_case(|x| x.question = format!("{:0100}", 0) => Ok(()); "question len upper bound")]
-    #[test_case(|x| x.question = format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize(101)); "question too long")]
+    #[test_case(|x| x.question = format!("{:0101}", 0) => Err(PollError::InvalidPollStringSize("poll question", 101)); "question too long")]
     fn poll_terminate(modify: fn(&mut PollTerminateProto)) -> Result<(), PollError> {
         let mut terminate = poll_terminate_proto();
         modify(&mut terminate);

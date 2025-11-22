@@ -36,7 +36,6 @@ mod error;
 pub use error::{ConnectError, SendError};
 
 pub mod fake;
-pub mod noise;
 pub mod server_requests;
 pub mod ws;
 
@@ -436,7 +435,7 @@ pub mod test_support {
     use crate::connect_state::{
         ConnectState, DefaultConnectorFactory, PreconnectingFactory, SUGGESTED_CONNECT_CONFIG,
     };
-    use crate::env::{Env, UserAgent};
+    use crate::env::{Env, StaticIpOrder, UserAgent};
     use crate::infra::route::DirectOrProxyProvider;
 
     pub async fn simple_chat_connection(
@@ -446,7 +445,7 @@ pub mod test_support {
         filter_routes: impl Fn(&UnresolvedHttpsServiceRoute) -> bool,
     ) -> Result<ChatConnection, ConnectError> {
         let dns_resolver = DnsResolver::new_with_static_fallback(
-            env.static_fallback(),
+            env.static_fallback(StaticIpOrder::HARDCODED),
             &no_network_change_events(),
         );
 
@@ -520,7 +519,7 @@ pub(crate) mod test {
     use libsignal_net_infra::host::Host;
     use libsignal_net_infra::route::testutils::ConnectFn;
     use libsignal_net_infra::route::{
-        DEFAULT_HTTPS_PORT, DirectOrProxyRoute, HttpRouteFragment, HttpsTlsRoute,
+        DEFAULT_HTTPS_PORT, DirectOrProxyRoute, HttpRouteFragment, HttpVersion, HttpsTlsRoute,
         PreconnectingFactory, TcpRoute, TlsRoute, TlsRouteFragment, UnresolvedHost,
     };
     use libsignal_net_infra::utils::no_network_change_events;
@@ -736,6 +735,7 @@ pub(crate) mod test {
                 fragment: HttpRouteFragment {
                     host_header: CHAT_DOMAIN.into(),
                     path_prefix: "".into(),
+                    http_version: Some(HttpVersion::Http1_1),
                     front_name: None,
                 },
                 inner: TlsRoute {
@@ -800,6 +800,7 @@ pub(crate) mod test {
             fragment: HttpRouteFragment {
                 host_header: CHAT_DOMAIN.into(),
                 path_prefix: "".into(),
+                http_version: Some(HttpVersion::Http1_1),
                 front_name: None,
             },
             inner: TlsRoute {

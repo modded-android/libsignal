@@ -60,6 +60,7 @@ pub fn only_direct_routes(
                 hostname,
                 cert: _,
                 min_tls_version: _,
+                http_version: _,
                 confirmation_header_name: _,
                 proxy: _,
             },
@@ -105,6 +106,7 @@ pub fn allow_domain_fronting(
                 hostname: _,
                 cert: _,
                 min_tls_version: _,
+                http_version: _,
                 confirmation_header_name: _,
                 proxy,
             },
@@ -276,10 +278,12 @@ pub async fn connect_websockets_on_incoming<S: AsyncDuplexStream + 'static, T: D
             std::future::pending()
         })
     });
-    warp::serve(filter)
-        .run_incoming(incoming_streams.map(|(host, stream)| {
-            log::info!("serving websocket to {host}");
-            Ok::<_, std::io::Error>(stream)
-        }))
-        .await
+    let mut incoming_streams = std::pin::pin!(incoming_streams);
+    while let Some((host, stream)) = incoming_streams.next().await {
+        log::info!("serving websocket to {host}");
+        tokio::spawn(hyper::server::conn::http1::Builder::new().serve_connection(
+            hyper_util::rt::TokioIo::new(stream),
+            hyper_util::service::TowerToHyperService::new(warp::service(filter)),
+        ));
+    }
 }

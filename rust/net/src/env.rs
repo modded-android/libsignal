@@ -52,6 +52,7 @@ const DOMAIN_CONFIG_CHAT: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/service",
@@ -74,6 +75,7 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/service-staging",
@@ -88,6 +90,7 @@ const DOMAIN_CONFIG_CDSI: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/cdsi",
@@ -104,6 +107,7 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/cdsi-staging",
@@ -120,13 +124,22 @@ const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svr2",
             configs: [PROXY_CONFIG_F_PROD, PROXY_CONFIG_G],
         }),
     },
-    ip_v4: &[ip_addr!(v4, "20.66.40.69")],
+    ip_v4: &[
+        ip_addr!(v4, "20.236.21.158"),
+        ip_addr!(v4, "20.104.52.125"),
+        ip_addr!(v4, "20.9.45.98"),
+        ip_addr!(v4, "20.66.40.69"),
+        ip_addr!(v4, "20.119.62.85"),
+        ip_addr!(v4, "20.65.43.198"),
+        ip_addr!(v4, "13.84.216.212"),
+    ],
     ip_v6: &[],
 };
 
@@ -136,13 +149,20 @@ const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svr2-staging",
             configs: [PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G],
         }),
     },
-    ip_v4: &[ip_addr!(v4, "20.253.229.239")],
+    ip_v4: &[
+        ip_addr!(v4, "104.43.134.192"),
+        ip_addr!(v4, "20.253.229.239"),
+        ip_addr!(v4, "157.55.188.67"),
+        ip_addr!(v4, "20.127.86.118"),
+        ip_addr!(v4, "20.186.175.196"),
+    ],
     ip_v6: &[],
 };
 
@@ -152,13 +172,20 @@ const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svrb-staging",
             configs: [PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G],
         }),
     },
-    ip_v4: &[ip_addr!(v4, "20.66.46.240")],
+    ip_v4: &[
+        ip_addr!(v4, "20.45.59.200"),
+        ip_addr!(v4, "132.196.9.248"),
+        ip_addr!(v4, "52.225.216.56"),
+        ip_addr!(v4, "20.66.46.240"),
+        ip_addr!(v4, "172.178.57.240"),
+    ],
     ip_v6: &[],
 };
 
@@ -168,13 +195,22 @@ const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
+        http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
         proxy: Some(ConnectionProxyConfig {
             path_prefix: "/svrb",
-            configs: [PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G],
+            configs: [PROXY_CONFIG_F_PROD, PROXY_CONFIG_G],
         }),
     },
-    ip_v4: &[ip_addr!(v4, "20.114.45.6")],
+    ip_v4: &[
+        ip_addr!(v4, "4.151.136.48"),
+        ip_addr!(v4, "20.232.191.209"),
+        ip_addr!(v4, "135.119.74.80"),
+        ip_addr!(v4, "172.200.87.186"),
+        ip_addr!(v4, "20.63.12.55"),
+        ip_addr!(v4, "20.66.41.177"),
+        ip_addr!(v4, "20.114.45.6"),
+    ],
     ip_v6: &[],
 };
 
@@ -296,6 +332,10 @@ pub struct ConnectionConfig {
     pub cert: RootCertificates,
     /// Which minimum version of TLS to require when connecting to the resource.
     pub min_tls_version: Option<SslVersion>,
+    /// Which version of HTTP to expect when connecting to the resource.
+    ///
+    /// This may be `None` for a non-HTTP resource.
+    pub http_version: Option<HttpVersion>,
     /// A header to look for that indicates that the resource was reached.
     ///
     /// If this is `Some()`, then the presence of the header in an HTTP response
@@ -323,12 +363,40 @@ pub struct KeyTransConfig {
     pub auditor_key_material: &'static [&'static [u8; 32]],
 }
 
+pub enum StaticIpOrder<'a, R> {
+    Hardcoded,
+    Shuffled(&'a mut R),
+}
+
+impl StaticIpOrder<'_, rand::rngs::ThreadRng> {
+    /// A convenience alias for [`Self::Hardcoded`] with a fixed RNG type.
+    pub const HARDCODED: Self = Self::Hardcoded;
+}
+
+impl<'a, R> StaticIpOrder<'a, R> {
+    /// Borrow `self` without consuming it.
+    ///
+    /// Makes up for `&mut` not being `Clone`, cf [`Option::as_mut`].
+    fn as_mut<'b>(&'b mut self) -> StaticIpOrder<'b, R> {
+        match self {
+            StaticIpOrder::Hardcoded => StaticIpOrder::Hardcoded,
+            StaticIpOrder::Shuffled(rng) => StaticIpOrder::Shuffled(rng),
+        }
+    }
+}
+
 impl DomainConfig {
-    pub fn static_fallback(&self) -> (&'static str, LookupResult) {
-        (
-            self.connect.hostname,
-            LookupResult::new(self.ip_v4.into(), self.ip_v6.into()),
-        )
+    pub fn static_fallback(
+        &self,
+        rng: StaticIpOrder<'_, impl Rng>,
+    ) -> (&'static str, LookupResult) {
+        let mut ip_v4 = self.ip_v4.to_vec();
+        let mut ip_v6 = self.ip_v6.to_vec();
+        if let StaticIpOrder::Shuffled(rng) = rng {
+            ip_v4.shuffle(rng);
+            ip_v6.shuffle(rng);
+        }
+        (self.connect.hostname, LookupResult::new(ip_v4, ip_v6))
     }
 }
 
@@ -383,6 +451,7 @@ impl ConnectionConfig {
             port,
             cert,
             min_tls_version,
+            http_version,
             confirmation_header_name: _,
             proxy,
         } = self;
@@ -425,7 +494,7 @@ impl ConnectionConfig {
 
         HttpsProvider::new(
             Arc::clone(&hostname),
-            HttpVersion::Http1_1,
+            http_version.expect("must have an HTTP version to connect to an HTTP resource"),
             DomainFrontRouteProvider::new(HttpVersion::Http1_1, domain_front_configs),
             TlsRouteProvider::new(
                 cert.clone(),
@@ -556,28 +625,29 @@ impl From<KeyTransConfig> for PublicConfig {
     }
 }
 
+const SVRB_ENV_MAX_CURRENT: usize = 3;
 const SVRB_ENV_MAX_PREVIOUS: usize = 3;
 
 pub struct SvrBEnv<'a> {
-    current: EnclaveEndpoint<'a, SvrSgx>,
-    // There may be differing numbers of previous endpoints in staging vs prod,
-    // so rather than store a fixed-sized array of previous, we store
+    // There may be differing numbers of current/previous endpoints in staging vs prod,
+    // so rather than store a fixed-sized array of current/previous, we store
     // a max-sized list of Options, which are often None but can be set.
-    // Thus, if staging has 2 and prod has 1, they can set [foo, bar, None] and
-    // [baz, None, None] respectively.
+    // Thus, if staging has 2 and prod has 1, they can set [Some(foo), Some(bar), None] and
+    // [Some(baz), None, None] respectively.
+    current: [Option<EnclaveEndpoint<'a, SvrSgx>>; SVRB_ENV_MAX_CURRENT],
     previous: [Option<EnclaveEndpoint<'a, SvrSgx>>; SVRB_ENV_MAX_PREVIOUS],
 }
 
 impl<'a> SvrBEnv<'a> {
     pub const fn new(
-        current: EnclaveEndpoint<'a, SvrSgx>,
+        current: [Option<EnclaveEndpoint<'a, SvrSgx>>; SVRB_ENV_MAX_CURRENT],
         previous: [Option<EnclaveEndpoint<'a, SvrSgx>>; SVRB_ENV_MAX_PREVIOUS],
     ) -> Self {
         Self { current, previous }
     }
 
-    pub const fn current(&self) -> &EnclaveEndpoint<'a, SvrSgx> {
-        &self.current
+    pub fn current(&self) -> impl std::iter::Iterator<Item = &EnclaveEndpoint<'a, SvrSgx>> {
+        self.current.iter().filter_map(|a| a.as_ref())
     }
 
     pub fn previous(&self) -> impl std::iter::Iterator<Item = &EnclaveEndpoint<'a, SvrSgx>> {
@@ -587,7 +657,7 @@ impl<'a> SvrBEnv<'a> {
     pub fn current_and_previous(
         &self,
     ) -> impl std::iter::Iterator<Item = &EnclaveEndpoint<'a, SvrSgx>> {
-        std::iter::once(&self.current).chain(self.previous.iter().filter_map(|a| a.as_ref()))
+        self.current().chain(self.previous())
     }
 }
 
@@ -602,7 +672,12 @@ pub struct Env<'a> {
 
 impl<'a> Env<'a> {
     /// Returns a static mapping from hostnames to [`LookupResult`]s.
-    pub fn static_fallback(&self) -> HashMap<&'a str, LookupResult> {
+    ///
+    /// If an RNG is provided, the static IPs are shuffled in the resulting map.
+    pub fn static_fallback(
+        &self,
+        mut rng: StaticIpOrder<'_, impl Rng>,
+    ) -> HashMap<&'a str, LookupResult> {
         let Self {
             cdsi,
             svr2,
@@ -612,19 +687,17 @@ impl<'a> Env<'a> {
             keytrans_config: _,
         } = self;
 
-        let svrb_static_fallbacks = svr_b
-            .current_and_previous()
-            .map(|enclave_endpoint| enclave_endpoint.domain_config.static_fallback());
-
-        HashMap::from_iter(
-            [
-                cdsi.domain_config.static_fallback(),
-                svr2.domain_config.static_fallback(),
-                chat_domain_config.static_fallback(),
-            ]
-            .into_iter()
-            .chain(svrb_static_fallbacks),
-        )
+        let mut result = HashMap::from_iter([
+            cdsi.domain_config.static_fallback(rng.as_mut()),
+            svr2.domain_config.static_fallback(rng.as_mut()),
+            chat_domain_config.static_fallback(rng.as_mut()),
+        ]);
+        result.extend(
+            svr_b.current_and_previous().map(|enclave_endpoint| {
+                enclave_endpoint.domain_config.static_fallback(rng.as_mut())
+            }),
+        );
+        result
     }
 }
 
@@ -642,11 +715,15 @@ pub const STAGING: Env<'static> = Env {
         params: ENDPOINT_PARAMS_SVR2_STAGING,
     },
     svr_b: SvrBEnv {
-        current: EnclaveEndpoint {
-            domain_config: DOMAIN_CONFIG_SVRB_STAGING,
-            ws_config: RECOMMENDED_WS_CONFIG,
-            params: ENDPOINT_PARAMS_SVRB_STAGING,
-        },
+        current: [
+            Some(EnclaveEndpoint {
+                domain_config: DOMAIN_CONFIG_SVRB_STAGING,
+                ws_config: RECOMMENDED_WS_CONFIG,
+                params: ENDPOINT_PARAMS_SVRB_STAGING,
+            }),
+            None,
+            None,
+        ],
         previous: [None, None, None],
     },
     keytrans_config: KEYTRANS_CONFIG_STAGING,
@@ -666,11 +743,15 @@ pub const PROD: Env<'static> = Env {
         params: ENDPOINT_PARAMS_SVR2_PROD,
     },
     svr_b: SvrBEnv {
-        current: EnclaveEndpoint {
-            domain_config: DOMAIN_CONFIG_SVRB_PROD,
-            ws_config: RECOMMENDED_WS_CONFIG,
-            params: ENDPOINT_PARAMS_SVRB_PROD,
-        },
+        current: [
+            Some(EnclaveEndpoint {
+                domain_config: DOMAIN_CONFIG_SVRB_PROD,
+                ws_config: RECOMMENDED_WS_CONFIG,
+                params: ENDPOINT_PARAMS_SVRB_PROD,
+            }),
+            None,
+            None,
+        ],
         previous: [None, None, None],
     },
     keytrans_config: KEYTRANS_CONFIG_PROD,
@@ -755,6 +836,7 @@ mod test {
             port: PORT,
             cert: RootCertificates::Native,
             min_tls_version: Some(SslVersion::TLS1_2),
+            http_version: Some(HttpVersion::Http1_1),
             confirmation_header_name: None,
             proxy: Some(ConnectionProxyConfig {
                 path_prefix: "proxy-prefix",
@@ -785,6 +867,7 @@ mod test {
             fragment: HttpRouteFragment {
                 host_header: "host".into(),
                 path_prefix: "".into(),
+                http_version: Some(HttpVersion::Http1_1),
                 front_name: None,
             },
             inner: TlsRoute {
@@ -828,7 +911,7 @@ mod test {
             Duration::MAX,
         );
 
-        let (hostname, static_hardcoded_ips) = config.static_fallback();
+        let (hostname, static_hardcoded_ips) = config.static_fallback(StaticIpOrder::HARDCODED);
 
         let resolved_ips: Vec<_> = resolver
             .resolve(DnsLookupRequest {

@@ -19,7 +19,6 @@ import org.signal.libsignal.protocol.state.KyberPreKeyStore
 import org.signal.libsignal.protocol.state.PreKeyStore
 import org.signal.libsignal.protocol.state.SessionStore
 import org.signal.libsignal.protocol.state.SignedPreKeyStore
-import org.signal.libsignal.protocol.util.Pair
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -31,6 +30,7 @@ import java.nio.file.Path
 import java.util.Map
 import java.util.UUID
 import java.util.concurrent.Future
+
 
 public typealias ObjectHandle = Long
 
@@ -584,7 +584,7 @@ internal object Native {
   public external fun HttpRequest_new(method: String, path: String, bodyAsSlice: ByteArray?): ObjectHandle
 
   @JvmStatic @Throws(Exception::class)
-  public external fun IdentityKeyPair_Deserialize(input: ByteArray): Pair<*, *>
+  public external fun IdentityKeyPair_Deserialize(input: ByteArray): Pair<ObjectHandle, ObjectHandle>
   @JvmStatic
   public external fun IdentityKeyPair_Serialize(publicKey: ObjectHandle, privateKey: ObjectHandle): ByteArray
   @JvmStatic @Throws(Exception::class)
@@ -1268,6 +1268,8 @@ internal object Native {
   public external fun UnauthenticatedChatConnection_init_listener(chat: ObjectHandle, listener: BridgeChatListener): Unit
   @JvmStatic
   public external fun UnauthenticatedChatConnection_look_up_username_hash(asyncRuntime: ObjectHandle, chat: ObjectHandle, hash: ByteArray): CompletableFuture<UUID?>
+  @JvmStatic
+  public external fun UnauthenticatedChatConnection_look_up_username_link(asyncRuntime: ObjectHandle, chat: ObjectHandle, uuid: UUID, entropy: ByteArray): CompletableFuture<Pair<String, ByteArray>?>
   @JvmStatic
   public external fun UnauthenticatedChatConnection_send(asyncRuntime: ObjectHandle, chat: ObjectHandle, httpRequest: ObjectHandle, timeoutMillis: Int): CompletableFuture<Object>
   @JvmStatic
